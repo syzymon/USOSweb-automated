@@ -1,5 +1,5 @@
 import os
-import yaml
+import ruamel.yaml as yaml
 import logging
 import logging.config
 import coloredlogs
@@ -89,7 +89,7 @@ def main() -> None:
         channels=os.environ['USOS_NOTIFICATIONS_STREAMS'],
         enable=(os.environ['USOS_NOTIFICATIONS_ENABLE'] == "True"),
         config_file=os.environ['USOS_NOTIFICATIONS_CONFIG_FILE'])
-
+	
     data = DataController(
         dispatcher=notifications_dispatcher)
 
@@ -103,7 +103,15 @@ def main() -> None:
     scraper.run()
     data.analyze()
 
+def test():
+	notifications_dispatcher = Dispatcher(
+	channels=os.environ['USOS_NOTIFICATIONS_STREAMS'],
+	enable=(os.environ['USOS_NOTIFICATIONS_ENABLE'] == "True"),
+	config_file=os.environ['USOS_NOTIFICATIONS_CONFIG_FILE'])
+	notifications_dispatcher.send("eee")
+	exit(0)
 
 if __name__ == "__main__":
     if load_environmental_variables('.env') and check_required_dirs():
-        main()
+        #main()
+        test()

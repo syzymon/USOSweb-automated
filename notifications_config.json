@@ -1,7 +1,7 @@
 {
-	"Email": {
-		"mail_sender": "example@gmail.com",
-		"mail_recipient": "example@example.com",
+	"TokensEmail": {
+		"mail_sender": "example@mail.com",
+		"mail_recipient": "example@mail.com",
 		"mail_subject": "USOSweb: Changes have been detected"
 	},
 	"SMS": {

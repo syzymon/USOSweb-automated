@@ -7,28 +7,30 @@ logging = logging.getLogger(__name__)
 
 
 class SeleniumDriver:
-    """Provides a layer of abstraction to obtain a preconfigured object 
+    """Provides a layer of abstraction to obtain a preconfigured object
         of a Selenium-compatible web driver.
-        
+
         :param headless: whether the driver should run in headless mode
         :param config: set of config variables to tweak the behaviour of
             the web driver"""
 
-    def __init__(self, headless: bool, config: dict = {}) -> None:
+    def __init__(self, headless: bool, executable_path: str,
+                 config: dict = {}) -> None:
         self.headless = headless
+        self._executable_path = executable_path
         self.config = config
         self._driver = None
 
     def reset(self) -> None:
-        """Resets the instance of a web driver to ``None``. 
-        
-        This method might prove useful while switching between 
+        """Resets the instance of a web driver to ``None``.
+
+        This method might prove useful while switching between
         different web drivers.
         """
         logging.info("Resetting the webdriver instance")
         logging.debug("Headless? {} Config: {}".format(
             self.headless, self.config))
-        
+
         if self._driver:
             self.quit()
 
@@ -36,14 +38,14 @@ class SeleniumDriver:
 
     def get_instance(self) -> object:
         """Returns an instance of selected web driver.
-        
-        Changing the implementation of this method will allow you to 
-        integrate different web drivers and replace *Chrome* (the 
+
+        Changing the implementation of this method will allow you to
+        integrate different web drivers and replace *Chrome* (the
         default) with *Firefox*, *PhantomJS* or something else.
-        
+
         To find out more, read :ref:`CustomWebDriver`.
 
-        :returns: by default - an object of ChromeDriver. Can be 
+        :returns: by default - an object of ChromeDriver. Can be
             extended.
         """
         self.reset()
@@ -59,7 +61,7 @@ class SeleniumDriver:
 
     def exception_take_screenshot(self, codename: str) -> None:
         """Takes a screenshot of web driver's current viewport.
-        
+
         This method can be utilized as a tool for troubleshooting
         non-trivial errors with parsing. ::
 
@@ -109,10 +111,21 @@ class SeleniumDriver:
         options = webdriver.ChromeOptions()
         options.add_argument("--log-level=5")
         options.add_argument("--disable-extensions")
+        options.add_argument("--no-sandbox")
+
         if self.headless:
-            options.add_argument("headless")
+            options.add_argument("--headless")
+
         options.add_argument(
             "user-data-dir=data/chrome_profile")
-        driver = webdriver.Chrome(chrome_options=options)
+
+        driver_constructor_args = {
+            "chrome_options": options
+        }
+
+        if self._executable_path:
+            driver_constructor_args["executable_path"] = self._executable_path
+
+        driver = webdriver.Chrome(**driver_constructor_args)
 
         self._driver = driver

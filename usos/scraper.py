@@ -100,7 +100,7 @@ class Scraper:
     def _process_results_parsed(self, data: list) -> None:
         """Uploads parsed results to the data controller.
         
-        :param data: entites sent from a ScrapingTemplate.
+        :param data: entities sent from a ScrapingTemplate.
         """
 
         if len(data) == 1:

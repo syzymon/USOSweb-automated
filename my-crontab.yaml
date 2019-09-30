@@ -1,0 +1,5 @@
+jobs:
+  - name: token-registration
+    command: python3 tOKens.py
+    shell: /bin/bash
+    schedule: "*/1 * * * *"

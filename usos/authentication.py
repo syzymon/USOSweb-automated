@@ -1,4 +1,5 @@
 import logging
+import os
 
 logging = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class Authentication:
         
         :returns: ``False`` only if the authenication process has 
             failed."""
-        if self.user_authenticated:
+        if self.user_authenticated or os.environ['USOS_SCRAPER_NO_AUTHENTICATION']:
             logging.info("User already authenticated")
             return True
         else:
@@ -114,12 +115,13 @@ class Authentication:
     def _perform_login(self) -> None:
         """Fills the sign in form with credentials passed in the 
         initializer."""
+        logging.info("I try to log in")
         try:
             self.driver.find_element_by_name(
                 "username").send_keys(self.username)
             self.driver.find_element_by_name(
                 "password").send_keys(self.password)
-            self.driver.find_element_by_name("rememberMe").click()
+            # self.driver.find_element_by_name("rememberMe").click() - WORKS ONLY FOR USOS UWR NOT UW
             self.driver.find_element_by_name(
                 "password").send_keys(u'\ue007')
 

@@ -2,6 +2,9 @@ import sys
 import json
 import os.path
 import logging
+import zlib
+import datetime
+
 import yagmail
 from jinja2 import Environment, FileSystemLoader
 
@@ -9,8 +12,8 @@ logging = logging.getLogger(__name__)
 
 
 class Dispatcher:
-    """Allows for sending multiple messages via configured channels. 
-    
+    """Allows for sending multiple messages via configured channels.
+
     Creating a new dispatcher that operates on selected channels::
 
         from usos.notifications import Dispatcher
@@ -20,10 +23,10 @@ class Dispatcher:
             enable=True,
             config_file="notifications.json")
 
-    :param channels: names of the channels separated by a single space. 
-    :param enable: whether to allow the dispatcher to send any 
+    :param channels: names of the channels separated by a single space.
+    :param enable: whether to allow the dispatcher to send any
         notifications.
-    :param config_file: path to a file that contains channel-specific 
+    :param config_file: path to a file that contains channel-specific
         variables such as API Keys or special parameters.
     """
 
@@ -37,7 +40,7 @@ class Dispatcher:
         """Sends notifications via channels set in the initializer.
 
         :param data: the data that will be sent.
-        :returns: ``True`` if every notification has been sent 
+        :returns: ``True`` if every notification has been sent
             successfuly on every channel.
         """
         logging.info("Preparing dispatcher")
@@ -51,7 +54,7 @@ class Dispatcher:
 
         :param channel: a name of the channel.
         :param data: data that will be used to render the templates.
-        :returns: ``True`` if the notifications have been sent 
+        :returns: ``True`` if the notifications have been sent
             successfuly on a given channel.
         """
         if self.enable:
@@ -59,8 +62,9 @@ class Dispatcher:
                 channel_config = self.config[channel]
             except KeyError:
                 channel_config = {}
-                logging.exception("No configuration detected for {}".format(channel))
-            
+                logging.exception(
+                    "No configuration detected for {}".format(channel))
+
             stream = getattr(sys.modules[__name__], channel)(
                 data=data, config=channel_config)
             logging.info("Sending notifications via {}".format(channel))
@@ -69,7 +73,7 @@ class Dispatcher:
         return False
 
     def _load_config(self, filename: str) -> dict:
-        """Loads a configuration file containing channel-specific 
+        """Loads a configuration file containing channel-specific
         variables.
 
         :param filename: name of the configuration file
@@ -100,13 +104,13 @@ class Notification:
             def _render(self) -> None:
                 letter: str = "Hey, {name}! "
                               + "{message} "
-                              + "Take care, {author}."  
-               
+                              + "Take care, {author}."
+
                 letter = letter.format(
-                    name=data["recipient"], 
+                    name=data["recipient"],
                     message=data["message"],
                     author=data["sender"])
-                
+
                 self._rendered_template = letter
 
             def _send(self) -> bool:
@@ -127,12 +131,12 @@ class Notification:
         }
 
         dispatcher.send(my_message)
-        
+
     Read more at: :ref:`CustomNotificationsStreams`.
 
-    :param data: data that will be used in the rendering of the final 
-        message. 
-    :param config: variables that can be used for configuration purposes 
+    :param data: data that will be used in the rendering of the final
+        message.
+    :param config: variables that can be used for configuration purposes
         such as API Keys or custom parameters.
     """
 
@@ -161,7 +165,7 @@ class Notification:
     def render(self) -> str:
         """Renders the template that will be sent in a notification.
 
-        For rendering the template, this method uses a private 
+        For rendering the template, this method uses a private
         :meth:`_render` method.
 
         :returns: a rendered template.
@@ -173,7 +177,7 @@ class Notification:
     def send(self) -> bool:
         """Sends a notification if the rendered template isn't empty.
 
-        For sending a notification, this method uses a private 
+        For sending a notification, this method uses a private
         :meth:`_send` method.
 
         :returns: ``True`` if a notification has been sent successfuly.
@@ -189,7 +193,7 @@ class Notification:
     def render_and_send(self) -> bool:
         """Renders the template and then sends a notification.
 
-        This method is an equivalent of calling :meth:`render` and 
+        This method is an equivalent of calling :meth:`render` and
         :meth:`send` separately.
 
         :returns: ``True`` if a notification has been sent successfuly.
@@ -213,7 +217,8 @@ class Email(Notification):
             loader=FileSystemLoader('templates/notifications'),
             lstrip_blocks=True,
             trim_blocks=True)
-        template = env.get_template('Email.html')
+        template = env.get_template(
+            os.environ['USOS_NOTIFICATIONS_EMAIL_TEMPLATE'])
 
         self._rendered_template = template.render(data=self.data)
 
@@ -221,10 +226,58 @@ class Email(Notification):
         """Send an Email notification"""
         with yagmail.SMTP(self.config["mail_sender"],
                           oauth2_file="oauth2_creds.json") as yag:
+            print(self.data)
             status = yag.send(
-                self.config["mail_recipient"],
+                self.data.get("mail_recipient") or self.config[
+                    "mail_recipient"],
                 self.config["mail_subject"],
                 self._rendered_template)
+
+        logging.info("Sending mail status: {}".format(status))
+
+        return True  # FIXME
+
+
+class TokensEmail(Email):
+    def _send_single(self, yag, data_item) -> object:
+        recipient = data_item.get("mail_recipient") or self.config[
+            "mail_recipient"]
+
+        MAX_SAME_MAILS = 3
+
+        status = False
+
+        with open("./mail_counts.json", "r") as json_counts:
+            mail_counts = json.load(json_counts)
+
+            mail_hash = str(zlib.adler32(
+                json.dumps(data_item, sort_keys=True).encode("utf-8")))
+
+            cnt = mail_counts["sent"].get(mail_hash, 0)
+            if cnt + 1 <= MAX_SAME_MAILS:
+                status = yag.send(
+                    recipient,
+                    self.config["mail_subject"],
+                    self._rendered_template)
+
+                # TODO: if status
+
+                mail_counts["sent"][mail_hash] = cnt + 1
+                mail_counts["time"] = str(datetime.datetime.utcnow())
+
+        with open("./mail_counts.json", "w") as json_counts:
+            json.dump(mail_counts, json_counts)
+
+        return status
+
+    def _send(self) -> bool:
+        with yagmail.SMTP(self.config["mail_sender"],
+                          oauth2_file="oauth2_creds.json") as yag:
+            status = []
+
+            # print(self.data)
+            for data_item in self.data:
+                status.append(self._send_single(yag, data_item))
 
         logging.info("Sending mail status: {}".format(status))
 
